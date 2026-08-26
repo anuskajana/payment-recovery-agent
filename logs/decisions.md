@@ -23,3 +23,14 @@ categories (A: customer/temporary, B: customer/needs a fix, C: bank/temporary,
 D: ambiguous/escalate). Corrected one early mistake: initially mislabeled
 "wrong bank account used" as temporary, but the fix required customer action,
 not waiting — reclassified to Category B.
+
+## 2026-08-26 — Bug caught: simulator/rule engine naming mismatch
+Built simulator.py with error code names that didn't exactly match the keys
+in rule_engine.RULE_TABLE (e.g. simulator said "otp_3ds_authentication_failed",
+rule engine expected "otp_3ds_failed"). Result: 53% of a batch silently fell
+through to LLM escalation instead of the expected ~12%. Caught it by comparing
+actual pipeline output against the taxonomy doc's predicted ratio - a real
+example of why testing at batch scale (not just 4 hand-picked examples)
+matters. Fixed by aligning simulator codes to the rule engine's existing keys.
+After fix: 95% rule engine / 5% LLM on a 60-payment batch, consistent with
+the taxonomy research.

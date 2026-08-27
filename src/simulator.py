@@ -6,9 +6,7 @@ weights common failures (insufficient funds, OTP timeout) much higher than
 rare ones (fraud suspicion, unknown codes) - based on the taxonomy research
 in docs/failure_taxonomy.md.
 
-This matters for later steps: a baseline-vs-smart-system comparison only
-means something if tested on a realistic, lumpy distribution - not a
-perfectly even one nobody would see in production.
+
 """
 
 import os
@@ -20,10 +18,7 @@ from collections import Counter
 # (error_code, payment_method, relative_weight)
 # Higher weight = more common in real life. Weights are relative, not percentages.
 FAILURE_DISTRIBUTION = [
-    # NOTE: these codes must exactly match the keys in rule_engine.RULE_TABLE.
-    # Mismatched names here would silently send everything to the LLM layer -
-    # this bit us once already (see logs/decisions.md), keeping the note as
-    # a reminder for future edits.
+  
     ("insufficient_funds", "UPI", 22),
     ("otp_3ds_failed", "Card", 18),
     ("payment_cancelled", "UPI", 15),

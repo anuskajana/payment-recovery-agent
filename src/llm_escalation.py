@@ -11,8 +11,10 @@ table needs more research, not that the LLM layer needs to get "smarter."
 Two modes are supported:
 - MOCK_MODE=True  -> no API key needed, returns a clearly-labeled fake
                       decision so the rest of the pipeline can be tested
-- MOCK_MODE=False -> calls the real Anthropic API (needs ANTHROPIC_API_KEY
+- MOCK_MODE=False -> calls the real Google Gemini API (needs GEMINI_API_KEY
                       in .env)
+
+                      
 """
 
 import os
@@ -23,8 +25,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-MOCK_MODE = os.getenv("ANTHROPIC_API_KEY") is None
+MOCK_MODE = os.getenv("GEMINI_API_KEY") is None
 
+GEMINI_MODEL = "gemini-2.5-flash" 
 
 @dataclass
 class LLMDecision:
@@ -45,7 +48,7 @@ Given details about a failed payment, decide:
 2. Brief reasoning (2-3 sentences max)
 3. Your confidence in this decision: high / medium / low
 
-Respond ONLY in this exact JSON format, nothing else:
+Respond ONLY in this exact JSON format, nothing else, no markdown code fences:
 {"action": "...", "reasoning": "...", "confidence": "..."}
 
 Be conservative: if you are not confident, say so honestly rather than guessing
@@ -75,7 +78,7 @@ def _mock_decision(payment_context: dict) -> LLMDecision:
         action="escalate_to_support_MOCK",
         category="D",
         reasoning=(
-            "[MOCK MODE - no ANTHROPIC_API_KEY found in .env] "
+            "[MOCK MODE - no GEMINI_API_KEY found in .env] "
             f"Would have asked the LLM to reason about error code "
             f"'{payment_context.get('error_code')}'. Add a real API key "
             f"to .env to get an actual decision here."
@@ -86,18 +89,25 @@ def _mock_decision(payment_context: dict) -> LLMDecision:
 
 
 def _real_decision(payment_context: dict) -> LLMDecision:
-    import anthropic
+    from google import genai
 
-    client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY from env automatically
+    client = genai.Client()
 
-    response = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=300,
-        system=SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": _build_user_prompt(payment_context)}],
+    full_prompt = f"{SYSTEM_PROMPT}\n\n{_build_user_prompt(payment_context)}"
+
+    response = client.models.generate_content(
+       model=GEMINI_MODEL,
+        contents=full_prompt,
     )
 
-    raw_text = response.content[0].text.strip()
+    raw_text = (response.text or "").strip()
+
+    # Gemini sometimes wraps JSON in ```json ... ``` fences despite instructions -
+    # strip those defensively rather than trusting it followed the prompt exactly.
+    if raw_text.startswith("```"):
+        raw_text = raw_text.strip("`")
+        if raw_text.startswith("json"):
+            raw_text = raw_text[4:].strip()
 
     try:
         parsed = json.loads(raw_text)

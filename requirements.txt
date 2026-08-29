@@ -1,4 +1,4 @@
-anthropic
+google-genai
 pandas
 python-dotenv
 razorpay

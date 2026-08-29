@@ -11,10 +11,7 @@ table needs more research, not that the LLM layer needs to get "smarter."
 Two modes are supported:
 - MOCK_MODE=True  -> no API key needed, returns a clearly-labeled fake
                       decision so the rest of the pipeline can be tested
-- MOCK_MODE=False -> calls the real Google Gemini API (needs GEMINI_API_KEY
-                      in .env)
-
-                      
+- MOCK_MODE=False -> calls the real Gemini API (needs GEMINI_API_KEY in .env)
 """
 
 import os
@@ -27,7 +24,6 @@ load_dotenv()
 
 MOCK_MODE = os.getenv("GEMINI_API_KEY") is None
 
-GEMINI_MODEL = "gemini-2.5-flash" 
 
 @dataclass
 class LLMDecision:
@@ -91,22 +87,22 @@ def _mock_decision(payment_context: dict) -> LLMDecision:
 def _real_decision(payment_context: dict) -> LLMDecision:
     from google import genai
 
-    client = genai.Client()
+    api_key = os.getenv("GEMINI_API_KEY")
+    client = genai.Client(api_key=api_key)
 
     full_prompt = f"{SYSTEM_PROMPT}\n\n{_build_user_prompt(payment_context)}"
 
     response = client.models.generate_content(
-       model=GEMINI_MODEL,
+        model="gemini-3.6-flash",
         contents=full_prompt,
     )
 
-    raw_text = (response.text or "").strip()
-
-    # Gemini sometimes wraps JSON in ```json ... ``` fences despite instructions -
-    # strip those defensively rather than trusting it followed the prompt exactly.
+    raw_text = response.text.strip()
+    # Gemini sometimes wraps JSON in markdown fences even when asked not to -
+    # strip them defensively so parsing doesn't break.
     if raw_text.startswith("```"):
         raw_text = raw_text.strip("`")
-        if raw_text.startswith("json"):
+        if raw_text.lower().startswith("json"):
             raw_text = raw_text[4:].strip()
 
     try:

@@ -13,7 +13,7 @@ labeling of estimates over visual polish.
 import streamlit as st
 import pandas as pd
 
-from src import simulator, orchestrator, baseline, audit_trail, comparison, llm_escalation
+from src import simulator, orchestrator, baseline, audit_trail, comparison, llm_escalation, razorpay_integration
 
 st.set_page_config(page_title="Payment Recovery Agent",
                    page_icon="\U0001F4B3", layout="wide")
@@ -77,8 +77,8 @@ st.caption(
 st.markdown("---")
 
 # --- Tabs for the rest ---
-tab1, tab2, tab3 = st.tabs(
-    ["Decision Log", "Rule Engine vs LLM Split", "Audit Trail (raw)"])
+tab1, tab2, tab3, tab4 = st.tabs(
+    ["Decision Log", "Rule Engine vs LLM Split", "Audit Trail (raw)", "Razorpay Integration"])
 
 with tab1:
     st.subheader("Every payment in this batch, and the action taken")
@@ -144,3 +144,43 @@ with tab3:
             f"{len(entries)} total entries logged to data/payments.db "
             "- this table is never edited or deleted by normal operation."
         )
+with tab4:
+    st.subheader("Live call to Razorpay's real test-mode API")
+    st.write(
+        "Everything above runs on simulated failure data, generated locally to test "
+        "the rule engine and LLM escalation at batch scale. This tab is separate: it "
+        "makes a real network call to Razorpay's test-mode Orders API, so there's a "
+        "genuine, verifiable integration point with the platform - not just local data."
+    )
+
+    if not razorpay_integration.RAZORPAY_KEY_ID or not razorpay_integration.RAZORPAY_KEY_SECRET:
+        st.warning(
+            "RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET not found in .env - "
+            "add your test-mode keys to enable this.",
+            icon="warning",
+        )
+    else:
+        demo_amount = st.number_input(
+            "Order amount (Rs.)", min_value=1.0, value=499.0, step=1.0)
+        if st.button("Create a real test-mode order on Razorpay"):
+            with st.spinner("Calling Razorpay's API..."):
+                try:
+                    order = razorpay_integration.create_test_order(
+                        amount_rupees=demo_amount,
+                        receipt_id=f"streamlit_demo_{pd.Timestamp.now().value}",
+                    )
+                    st.success(
+                        "Order created successfully on Razorpay's servers.")
+                    st.json({
+                        "id": order["id"],
+                        "amount_paise": order["amount"],
+                        "amount_rupees": order["amount"] / 100,
+                        "currency": order["currency"],
+                        "status": order["status"],
+                    })
+                    st.caption(
+                        "You can verify this order exists by checking the Orders "
+                        "section of your Razorpay dashboard in Test Mode."
+                    )
+                except Exception as e:
+                    st.error(f"Razorpay API call failed: {e}")
